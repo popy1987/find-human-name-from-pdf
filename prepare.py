@@ -177,16 +177,16 @@ class Prepare:
         return True
 
     def ensure_spacy_models(self) -> bool:
-        """第一步：确保必需的 spaCy 模型已安装。
+        """第一步：确保必需的 spaCy 模型都在 dic 目录下。
 
-        检查优先级：1. 本地 dic 目录 -> 2. 系统已安装 -> 3. 下载到本地
-        这是必需步骤，模型缺失将阻止后续处理。
+        校验规则：若 dic 下缺少 zh_core_web_sm 或 en_core_web_sm，
+        则自动执行下载命令安装到 dic 目录。不依赖系统已安装的模型。
 
         Returns:
-            True 如果所有模型都已就绪
+            True 如果所有模型都在 dic 中就绪
 
         Raises:
-            RuntimeError: 如果模型安装失败
+            RuntimeError: 如果模型下载失败
         """
         self.logger.info("=== 检查 spaCy 语言模型 ===")
         self.logger.info(f"本地模型目录: {self.dic_dir}")
@@ -199,38 +199,25 @@ class Prepare:
                 "未安装 spaCy，请先运行: pip install spacy"
             )
 
-        all_ready = True
-        for model in self.REQUIRED_SPACY_MODELS:
-            is_available, location = self._check_spacy_model(model)
+        missing_in_dic = [
+            m for m in self.REQUIRED_SPACY_MODELS
+            if self._get_local_model_path(m) is None
+        ]
 
-            if is_available:
-                if location == model:
-                    self.logger.info(f"✓ 模型 {model} 已系统安装")
-                else:
-                    self.logger.info(f"✓ 模型 {model} 在本地目录找到: {location}")
-            else:
-                self.logger.warning(f"✗ 模型 {model} 未找到，尝试下载到本地...")
-                if self._install_model_to_local(model):
-                    # 再次验证
-                    is_available, location = self._check_spacy_model(model)
-                    if is_available:
-                        self.logger.info(f"✓ 模型 {model} 下载验证成功")
-                    else:
-                        self.logger.error(f"✗ 模型 {model} 下载后仍无法加载")
-                        all_ready = False
-                else:
-                    all_ready = False
-
-        if not all_ready:
-            missing = [
-                m for m in self.REQUIRED_SPACY_MODELS
-                if not self._check_spacy_model(m)[0]
-            ]
-            raise RuntimeError(
-                f"必需的 spaCy 模型安装失败: {', '.join(missing)}. "
-                f"请手动下载并放入 {self.dic_dir} 目录，"
-                f"或运行: python -m spacy download {' '.join(missing)}"
-            )
+        if missing_in_dic:
+            self.logger.info(f"dic 下缺少模型: {', '.join(missing_in_dic)}，开始下载到 dic...")
+            for model in missing_in_dic:
+                self.logger.info(f"正在下载 {model} 到 {self.dic_dir}...")
+                if not self._install_model_to_local(model):
+                    raise RuntimeError(
+                        f"模型 {model} 下载失败。请手动运行: "
+                        f"python -m spacy download {model} --target {self.dic_dir}"
+                    )
+                self.logger.info(f"✓ {model} 已安装到 dic")
+        else:
+            for model in self.REQUIRED_SPACY_MODELS:
+                path = self._get_local_model_path(model)
+                self.logger.info(f"✓ 模型 {model} 已在 dic 中: {path}")
 
         self.logger.info("所有 spaCy 模型准备就绪")
         return True
