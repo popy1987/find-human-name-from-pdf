@@ -18,9 +18,10 @@
 ├── prepare.py        # 准备阶段：检查/安装模型 + PDF 解析
 ├── run.py            # 运行阶段：使用 spaCy NER 提取人名
 ├── teardown.py       # 清理阶段：保存结果和生成报告
-├── dic/              # 本地 spaCy 模型目录
+├── dic/                  # 本地 spaCy 模型目录
 │   ├── zh_core_web_sm/   # 中文 NER 模型
 │   ├── en_core_web_sm/   # 英文 NER 模型
+│   ├── name_dic_for_user.txt  # 用户自定义人名（每行一个，可选）
 │   └── README.md         # 模型目录说明
 ├── logs/             # 日志文件目录（自动创建，不加入 Git）
 ├── output/           # 结果输出目录（自动创建，不加入 Git）
@@ -38,6 +39,18 @@ pip install -r requirements.txt
 依赖包括：
 - `PyMuPDF` - PDF 解析
 - `spacy` - NER 模型运行框架
+
+## 自定义人名（可选）
+
+在 `dic/name_dic_for_user.txt` 中添加需要特别识别的名字，每行一个。这些名字会通过 spaCy 的 **EntityRuler** 注入 NER 管道，作为 PERSON 实体规则。
+
+```
+# 每行一个名字，# 开头的行会被忽略
+鲁迅
+村上春树
+```
+
+若文件不存在，首次运行时会自动创建空模板。
 
 ## 准备 spaCy 模型
 

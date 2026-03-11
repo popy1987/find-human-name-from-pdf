@@ -87,7 +87,7 @@ class Main:
 
             # 2. 运行阶段
             self.logger.info("=== 运行阶段 ===")
-            self.run = Run(content, self.logger)
+            self.run = Run(content, self.logger, custom_names=self.prepare.custom_names)
             results = self.run.process()
 
             # 3. 清理阶段

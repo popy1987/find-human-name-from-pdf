@@ -3,7 +3,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 
 class Prepare:
@@ -33,6 +33,12 @@ class Prepare:
         # 本地模型目录
         self.dic_dir = os.path.join(os.path.dirname(__file__), "dic")
         self._ensure_dic_dir()
+
+        # 用户自定义人名词典路径
+        self.name_dic_path = os.path.join(self.dic_dir, "name_dic_for_user.txt")
+
+        # 加载的自定义人名列表（供 Run 使用）
+        self.custom_names: List[str] = []
 
     def _ensure_dic_dir(self):
         """确保本地模型目录存在。"""
@@ -222,6 +228,42 @@ class Prepare:
         self.logger.info("所有 spaCy 模型准备就绪")
         return True
 
+    def _load_custom_names(self) -> List[str]:
+        """加载 name_dic_for_user.txt 中的自定义人名。
+
+        若文件不存在则创建模板并返回空列表。
+        每行一个名字，以 # 开头的行和空行会被忽略。
+
+        Returns:
+            自定义人名的列表
+        """
+        if not os.path.exists(self.name_dic_path):
+            default_content = (
+                "# 用户自定义人名词典\n"
+                "# 每行一个名字，支持中文和英文\n"
+                "# 以 # 开头的行会被忽略\n"
+            )
+            try:
+                with open(self.name_dic_path, "w", encoding="utf-8") as f:
+                    f.write(default_content)
+                self.logger.info(f"已创建模板文件: {self.name_dic_path}")
+            except OSError as e:
+                self.logger.warning(f"无法创建 name_dic_for_user.txt: {e}")
+            return []
+
+        names = []
+        try:
+            with open(self.name_dic_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        names.append(line)
+        except OSError as e:
+            self.logger.warning(f"无法读取 name_dic_for_user.txt: {e}")
+            return []
+
+        return names
+
     def load_parser(self):
         """第二步：加载解析器。
 
@@ -323,13 +365,18 @@ class Prepare:
         # 第一步：确保 spaCy 模型（必需）
         self.ensure_spacy_models()
 
-        # 第二步：校验
+        # 第二步：加载用户自定义人名词典
+        self.custom_names = self._load_custom_names()
+        if self.custom_names:
+            self.logger.info(f"已加载 {len(self.custom_names)} 个自定义人名: {self.name_dic_path}")
+
+        # 第三步：校验
         self.validate()
 
-        # 第三步：加载解析器
+        # 第四步：加载解析器
         parser = self.load_parser()
 
-        # 第四步：读取内容
+        # 第五步：读取内容
         content = self.read_content(parser)
 
         return content

@@ -4,6 +4,22 @@ import re
 from typing import Dict, List, Optional, Set
 
 
+def _add_custom_names_to_nlp(nlp, custom_names: List[str], logger: logging.Logger) -> None:
+    """将自定义人名通过 EntityRuler 注入 spaCy 管道。"""
+    if not custom_names:
+        return
+    try:
+        if "entity_ruler" in nlp.pipe_names:
+            ruler = nlp.get_pipe("entity_ruler")
+        else:
+            ruler = nlp.add_pipe("entity_ruler", before="ner")
+        patterns = [{"label": "PERSON", "pattern": name} for name in custom_names]
+        ruler.add_patterns(patterns)
+        logger.info(f"已将 {len(custom_names)} 个自定义人名注入 spaCy")
+    except Exception as e:
+        logger.warning(f"注入自定义人名失败: {e}")
+
+
 class Run:
     """Run class for executing the main workflow.
 
@@ -16,15 +32,17 @@ class Run:
     注意：所有人名必须通过 spaCy NER 提取，不使用任何正则匹配或词典匹配。
     """
 
-    def __init__(self, content: str, logger: logging.Logger):
+    def __init__(self, content: str, logger: logging.Logger, custom_names: Optional[List[str]] = None):
         """Initialize the Run class.
 
         Args:
             content: 从文件提取的文本内容
             logger: 日志记录器实例
+            custom_names: 来自 name_dic_for_user.txt 的自定义人名列表
         """
         self.content = content
         self.logger = logger
+        self.custom_names = custom_names or []
         self.names: Set[str] = set()
         self.name_counts: Dict[str, int] = {}
 
@@ -80,6 +98,7 @@ class Run:
                 try:
                     self.nlp_en = spacy.load(local_en)
                     self.logger.info(f"成功从本地加载 spaCy 英文模型: {local_en}")
+                    _add_custom_names_to_nlp(self.nlp_en, self.custom_names, self.logger)
                     loaded = True
                 except Exception as e:
                     self.logger.warning(f"本地英文模型加载失败: {e}")
@@ -88,6 +107,7 @@ class Run:
                 try:
                     self.nlp_en = spacy.load("en_core_web_sm")
                     self.logger.info("成功从系统路径加载 spaCy 英文模型")
+                    _add_custom_names_to_nlp(self.nlp_en, self.custom_names, self.logger)
                 except OSError:
                     self.logger.warning("未找到 spaCy 英文模型")
 
@@ -98,6 +118,7 @@ class Run:
                 try:
                     self.nlp_zh = spacy.load(local_zh)
                     self.logger.info(f"成功从本地加载 spaCy 中文模型: {local_zh}")
+                    _add_custom_names_to_nlp(self.nlp_zh, self.custom_names, self.logger)
                     loaded = True
                 except Exception as e:
                     self.logger.warning(f"本地中文模型加载失败: {e}")
@@ -106,6 +127,7 @@ class Run:
                 try:
                     self.nlp_zh = spacy.load("zh_core_web_sm")
                     self.logger.info("成功从系统路径加载 spaCy 中文模型")
+                    _add_custom_names_to_nlp(self.nlp_zh, self.custom_names, self.logger)
                 except OSError:
                     self.logger.warning("未找到 spaCy 中文模型")
 
