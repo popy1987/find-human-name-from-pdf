@@ -37,12 +37,32 @@ class Run:
         self._load_spacy_models()
 
     def _get_local_model_path(self, model_name: str) -> Optional[str]:
-        """获取本地模型路径。"""
-        local_path = os.path.join(self.dic_dir, model_name)
-        if os.path.exists(local_path) and os.path.isdir(local_path):
-            meta_path = os.path.join(local_path, "meta.json")
-            if os.path.exists(meta_path):
-                return local_path
+        """获取本地模型路径，兼容多种目录结构。
+
+        支持的目录结构：
+        1. dic/{model}/config.cfg  - 直接放置的模型
+        2. dic/{model}/{model}-3.x.x/config.cfg  - pip 安装后的包结构（子目录）
+        """
+        base_path = os.path.join(self.dic_dir, model_name)
+        if not os.path.exists(base_path) or not os.path.isdir(base_path):
+            return None
+
+        # 结构1: config.cfg 直接在模型目录下
+        config_direct = os.path.join(base_path, "config.cfg")
+        if os.path.exists(config_direct):
+            return base_path
+
+        # 结构2: 模型在子目录 {model_name}-版本号/ 下（pip 安装的包结构）
+        try:
+            for item in os.listdir(base_path):
+                sub_path = os.path.join(base_path, item)
+                if os.path.isdir(sub_path) and item.startswith(model_name + "-"):
+                    config_in_sub = os.path.join(sub_path, "config.cfg")
+                    if os.path.exists(config_in_sub):
+                        return sub_path
+        except OSError:
+            pass
+
         return None
 
     def _load_spacy_models(self):

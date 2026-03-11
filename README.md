@@ -59,7 +59,7 @@ python -m spacy download zh_core_web_sm
 python -m spacy download en_core_web_sm
 
 # 或者下载到指定目录
-python -m spacy download zh_core_web_sm --path ./dic
+python -m spacy download zh_core_web_sm --target ./dic
 ```
 
 ### 方式三：复制已有模型
@@ -185,12 +185,22 @@ python main.py --test
 
 A: 已自动处理 Windows 控制台 UTF-8 编码。如仍有问题，请确保使用支持 UTF-8 的终端。
 
-### Q: 中文模型下载太慢？
+### Q: zh_core_web_sm 下载不下来或很慢？
 
-A: 
-1. 手动下载模型压缩包
-2. 解压到 `dic/zh_core_web_sm/` 目录
-3. 确保目录包含 `meta.json` 文件
+A: 国内访问 GitHub 可能较慢，可尝试：
+
+1. **先安装到系统，再复制到 dic：**
+   ```bash
+   python -m spacy download zh_core_web_sm
+   # 复制 Python\Lib\site-packages\zh_core_web_sm 文件夹到项目 dic/ 目录
+   ```
+
+2. **使用镜像或代理** 加速 GitHub 下载
+
+3. **手动下载 whl 文件** 从 [spacy-models releases](https://github.com/explosion/spacy-models/releases) 下载对应版本，然后：
+   ```bash
+   pip install zh_core_web_sm-3.8.0-py3-none-any.whl --target ./dic
+   ```
 
 ### Q: 提取的人名不完整？
 
