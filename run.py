@@ -5,17 +5,25 @@ from typing import Dict, List, Optional, Set
 
 
 def _add_custom_names_to_nlp(nlp, custom_names: List[str], logger: logging.Logger) -> None:
-    """将自定义人名通过 EntityRuler 注入 spaCy 管道。"""
+    """将自定义人名通过 EntityRuler 注入 spaCy 管道，设为最高优先级。
+
+    使用 after=\"ner\" 让 EntityRuler 在 NER 之后执行，
+    overwrite_ents=True 使得自定义人名可覆盖 NER 的识别结果。
+    """
     if not custom_names:
         return
     try:
         if "entity_ruler" in nlp.pipe_names:
             ruler = nlp.get_pipe("entity_ruler")
         else:
-            ruler = nlp.add_pipe("entity_ruler", before="ner")
+            ruler = nlp.add_pipe(
+                "entity_ruler",
+                after="ner",
+                config={"overwrite_ents": True},
+            )
         patterns = [{"label": "PERSON", "pattern": name} for name in custom_names]
         ruler.add_patterns(patterns)
-        logger.info(f"已将 {len(custom_names)} 个自定义人名注入 spaCy")
+        logger.info(f"已将 {len(custom_names)} 个自定义人名注入 spaCy（最高优先级）")
     except Exception as e:
         logger.warning(f"注入自定义人名失败: {e}")
 
