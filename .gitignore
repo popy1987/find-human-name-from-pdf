@@ -5,6 +5,9 @@ logs/
 # Output files
 output/
 
+# Local spaCy models (downloaded at runtime)
+dic/
+
 # Python
 __pycache__/
 *.py[cod]
