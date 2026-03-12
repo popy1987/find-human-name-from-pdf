@@ -81,6 +81,22 @@ class Teardown:
         else:
             lines.append("未提取到符合条件的人名")
 
+        # 标点校验结果
+        issues = self.results.get("punctuation_issues", [])
+        if issues:
+            lines.append("-" * 50)
+            lines.append(f"标点符号校验（GB/T 15834-2011）: 发现 {len(issues)} 处问题")
+            lines.append("-" * 50)
+            for i, issue in enumerate(issues[:10], 1):
+                ctx = issue.get("context", "")
+                lines.append(
+                    f"{i}. [{issue['rule_id']}] {issue['message']} (位置{issue['position']})"
+                )
+                if ctx:
+                    lines.append(f"    → {ctx}")
+            if len(issues) > 10:
+                lines.append(f"    ... 还有 {len(issues) - 10} 处，详见 JSON 输出")
+
         lines.append("=" * 50)
 
         report = "\n".join(lines)

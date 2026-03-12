@@ -3,6 +3,8 @@ import os
 import re
 from typing import Dict, List, Optional, Set
 
+from punctuation_validator import validate_punctuation
+
 
 def _add_custom_names_to_nlp(nlp, custom_names: List[str], logger: logging.Logger) -> None:
     """将自定义人名通过 EntityRuler 注入 spaCy 管道，设为最高优先级。
@@ -34,8 +36,9 @@ class Run:
     功能职责：
     1. 接收来自 Prepare 的文本内容
     2. 使用 spaCy NER 进行中英文人名识别（唯一方式）
-    3. 去重并统计人名出现频率
-    4. 返回结构化的人名列表
+    3. 标点符号校验（基于 GB/T 15834-2011，spaCy 分句 + 规则引擎）
+    4. 去重并统计人名出现频率
+    5. 返回结构化的人名列表和标点问题列表
 
     注意：所有人名必须通过 spaCy NER 提取，不使用任何正则匹配或词典匹配。
     """
@@ -216,6 +219,31 @@ class Run:
         self.logger.info(f"共提取到 {len(self.names)} 个唯一人名")
         return self.names
 
+    def _validate_punctuation(self) -> List:
+        """标点符号校验（基于 GB/T 15834-2011）。
+
+        使用 spaCy 分句进行上下文分析，结合规则引擎校验。
+        """
+        self.logger.info("开始标点符号校验（GB/T 15834-2011）")
+
+        nlp = self.nlp_zh or self.nlp_en
+        issues = validate_punctuation(self.content, nlp=nlp, use_nlp=(nlp is not None))
+
+        self.logger.info(f"标点校验完成，发现 {len(issues)} 处问题")
+
+        if issues:
+            for i, issue in enumerate(issues[:5], 1):
+                ctx = getattr(issue, "context", "") or ""
+                self.logger.info(
+                    f"  {i}. [{issue.rule_id}] {issue.message} (位置 {issue.position})"
+                )
+                if ctx:
+                    self.logger.info(f"      → {ctx}")
+            if len(issues) > 5:
+                self.logger.info(f"  ... 还有 {len(issues) - 5} 处问题")
+
+        return issues
+
     def filter_and_rank(self, min_count: int = 2) -> List[Dict]:
         """过滤并排序人名。
 
@@ -265,6 +293,9 @@ class Run:
         # 使用 spaCy NER 提取人名（唯一方式）
         self.extract_names_with_spacy()
 
+        # 标点符号校验（基于 GB/T 15834-2011，使用 spaCy 分句）
+        punctuation_issues = self._validate_punctuation()
+
         # 过滤和排序
         ranked_names = self.filter_and_rank(min_count=2)
 
@@ -281,6 +312,18 @@ class Run:
             "mixed_count": mixed_count,
             "names": ranked_names,
             "content_length": len(self.content),
+            "punctuation_issues": [
+                {
+                    "rule_id": i.rule_id,
+                    "position": i.position,
+                    "length": i.length,
+                    "text": i.text,
+                    "message": i.message,
+                    "suggestion": i.suggestion,
+                    "context": getattr(i, "context", ""),
+                }
+                for i in punctuation_issues
+            ],
         }
 
         self.logger.info(f"处理完成: {results['filtered_names']} 个人名")
