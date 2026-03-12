@@ -11,6 +11,9 @@ strip-markdown>=1.0.0
 # NER and NLP
 spacy>=3.7.0
 
+# Wikipedia intro (optional)
+Wikipedia-API>=0.7.0
+
 # Optional: HanLP for better Chinese NER
 # hanlp>=2.1.0
 

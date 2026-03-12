@@ -4,6 +4,7 @@ import re
 from typing import Dict, List, Optional, Set
 
 from punctuation_validator import validate_punctuation
+from wiki_intro import fetch_intros_for_names
 
 
 def _add_custom_names_to_nlp(nlp, custom_names: List[str], logger: logging.Logger) -> None:
@@ -43,17 +44,25 @@ class Run:
     注意：所有人名必须通过 spaCy NER 提取，不使用任何正则匹配或词典匹配。
     """
 
-    def __init__(self, content: str, logger: logging.Logger, custom_names: Optional[List[str]] = None):
+    def __init__(
+        self,
+        content: str,
+        logger: logging.Logger,
+        custom_names: Optional[List[str]] = None,
+        wiki_available: bool = True,
+    ):
         """Initialize the Run class.
 
         Args:
             content: 从文件提取的文本内容
             logger: 日志记录器实例
             custom_names: 来自 name_dic_for_user.txt 的自定义人名列表
+            wiki_available: prepare 阶段嗅探结果，为 False 时不获取维基简介
         """
         self.content = content
         self.logger = logger
         self.custom_names = custom_names or []
+        self.wiki_available = wiki_available
         self.names: Set[str] = set()
         self.name_counts: Dict[str, int] = {}
 
@@ -282,6 +291,27 @@ class Run:
         self.logger.info(f"过滤后剩余 {len(sorted_names)} 个人名")
         return sorted_names
 
+    def _fetch_wiki_intros(self, ranked_names: List[Dict], max_names: int = 20) -> dict:
+        """为排名靠前的人名获取维基百科简介。
+
+        Args:
+            ranked_names: 过滤排序后的人名列表
+            max_names: 最多获取简介的人数（避免请求过多）
+
+        Returns:
+            {name: intro} 字典
+        """
+        try:
+            return fetch_intros_for_names(
+                ranked_names,
+                logger=self.logger,
+                delay=0.2,
+                max_names=max_names,
+            )
+        except Exception as e:
+            self.logger.warning(f"获取维基简介时出错: {e}")
+            return {}
+
     def process(self) -> Dict:
         """执行完整的人名提取流程。
 
@@ -298,6 +328,15 @@ class Run:
 
         # 过滤和排序
         ranked_names = self.filter_and_rank(min_count=2)
+
+        # 为排名靠前的人名获取维基百科简介（仅当 prepare 嗅探通过时）
+        if self.wiki_available and ranked_names:
+            intros = self._fetch_wiki_intros(ranked_names, max_names=20)
+            for item in ranked_names:
+                item["intro"] = intros.get(item["name"])
+        else:
+            for item in ranked_names:
+                item["intro"] = None
 
         # 统计
         english_count = sum(1 for n in ranked_names if n["type"] == "英文")

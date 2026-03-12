@@ -44,6 +44,7 @@ pip install -r requirements.txt
 - `python-docx` - DOCX 解析
 - `textract` - DOC 解析（需系统安装 antiword 等依赖）
 - `strip-markdown` - Markdown 解析（提取纯文本，去除语法标记）
+- `Wikipedia-API` - 为人名获取维基百科简介
 - `spacy` - NER 模型运行框架
 
 ## 自定义人名（可选）
@@ -188,6 +189,8 @@ python main.py --test
 **重要约束**：所有人名必须通过 spaCy NER 提取，模型不可用时程序会报错退出。
 
 **标点校验**：基于 GB/T 15834-2011 国家标准，使用 spaCy 分句 + 规则引擎校验。详见下方「标点符号校验规则」。
+
+**维基简介**：为人名获取维基百科简介（Wikipedia-API），中文人名查中文维基，英文人名查英文维基，最多为前 20 人获取（需网络访问维基百科）。
 
 ### punctuation_validator.py
 

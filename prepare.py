@@ -40,6 +40,24 @@ class Prepare:
         # 加载的自定义人名列表（供 Run 使用）
         self.custom_names: List[str] = []
 
+        # 维基百科 API 是否可用（prepare 阶段嗅探）
+        self.wiki_available: bool = True
+
+    def _probe_wikipedia(self) -> None:
+        """嗅探维基百科 API 是否可访问。若超时则本次不获取人名简介。"""
+        try:
+            from wiki_intro import probe_wikipedia_api
+
+            self.wiki_available = probe_wikipedia_api(
+                timeout=5,
+                logger=self.logger,
+            )
+            if self.wiki_available:
+                self.logger.info("维基百科 API 嗅探通过，将为人名获取简介")
+        except Exception as e:
+            self.logger.warning(f"维基百科嗅探异常: {e}，本次不获取人名简介")
+            self.wiki_available = False
+
     def _ensure_dic_dir(self):
         """确保本地模型目录存在。"""
         os.makedirs(self.dic_dir, exist_ok=True)
@@ -524,18 +542,21 @@ class Prepare:
         # 第一步：确保 spaCy 模型（必需）
         self.ensure_spacy_models()
 
-        # 第二步：加载用户自定义人名词典
+        # 第二步：嗅探维基百科 API（可选）
+        self._probe_wikipedia()
+
+        # 第三步：加载用户自定义人名词典
         self.custom_names = self._load_custom_names()
         if self.custom_names:
             self.logger.info(f"已加载 {len(self.custom_names)} 个自定义人名: {self.name_dic_path}")
 
-        # 第三步：校验
+        # 第四步：校验
         self.validate()
 
-        # 第四步：加载解析器
+        # 第五步：加载解析器
         parser = self.load_parser()
 
-        # 第五步：读取内容
+        # 第六步：读取内容
         content = self.read_content(parser)
 
         return content

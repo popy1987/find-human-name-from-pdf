@@ -78,6 +78,11 @@ class Teardown:
         if names:
             for i, item in enumerate(names, 1):
                 lines.append(f"{i}. {item['name']}: {item['count']} 次")
+                intro = item.get("intro")
+                if intro:
+                    # 简介缩进显示，过长时截断
+                    intro_display = intro if len(intro) <= 120 else intro[:117] + "…"
+                    lines.append(f"   └ {intro_display}")
         else:
             lines.append("未提取到符合条件的人名")
 
