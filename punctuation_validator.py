@@ -37,6 +37,29 @@ def _get_context(text: str, position: int, length: int) -> str:
     return f"{before}{ctx_before}【{problem}】{ctx_after}{after}"
 
 
+def _is_name_before_colon(text: str, colon_pos: int) -> bool:
+    """判断冒号前是否为疑似人名（2-4 个汉字，用于对话标注等）。
+
+    如「张三：」「鲁迅：」等为人名后的冒号，属正确用法，不报错。
+    """
+    if colon_pos <= 0:
+        return False
+    # 向前找连续的中文字符（可含间隔号 ·）
+    i = colon_pos - 1
+    count = 0
+    while i >= 0:
+        c = text[i]
+        if '\u4e00' <= c <= '\u9fff':
+            count += 1
+            i -= 1
+        elif c == '·' and count > 0 and i > 0:
+            # 间隔号如 马克·吐温
+            i -= 1
+        else:
+            break
+    return 2 <= count <= 4
+
+
 @dataclass
 class PunctuationIssue:
     """标点问题记录。"""
@@ -180,6 +203,9 @@ def _check_halfwidth(text: str) -> List[PunctuationIssue]:
         pattern = rf'[\u4e00-\u9fa5]{re.escape(char)}(?=[\s\u4e00-\u9fa5]|$)'
         for m in re.finditer(pattern, text):
             pos = m.start() + len(m.group()) - 1
+            # 人名后的冒号是正确的（如「张三：」），不报错
+            if char == ':' and _is_name_before_colon(text, pos):
+                continue
             issues.append(PunctuationIssue(
                 rule_id="HALFWIDTH",
                 position=pos,
@@ -227,8 +253,11 @@ def _check_sentence_end_punctuation(
                     break
 
                 # 句子不应以逗号、顿号、分号、冒号结尾（除非是省略等特殊情况）
+                # 例外：人名后的冒号是正确的，如「张三：」用于对话标注
                 if last_char in ('，', '、', '；', '：'):
                     abs_pos = start + sent.end_char - 1
+                    if last_char == '：' and _is_name_before_colon(text, abs_pos):
+                        continue  # 人名后的冒号不报错
                     issues.append(PunctuationIssue(
                         rule_id="SENT_END",
                         position=abs_pos,
