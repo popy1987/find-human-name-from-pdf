@@ -16,7 +16,7 @@ class Prepare:
     4. 将文件内容读取为文本（处理大文件，支持几十万字）
     """
 
-    SUPPORTED_FORMATS = {".pdf", ".doc", ".docx"}
+    SUPPORTED_FORMATS = {".pdf", ".doc", ".docx", ".txt"}
     REQUIRED_SPACY_MODELS = ["zh_core_web_sm", "en_core_web_sm"]
 
     def __init__(self, file_path: str, logger: logging.Logger):
@@ -268,7 +268,7 @@ class Prepare:
         """第二步：加载解析器。
 
         根据文件类型返回对应的解析函数。
-        支持 PDF、DOC、DOCX。
+        支持 PDF、DOC、DOCX、TXT。
 
         Returns:
             解析函数
@@ -290,6 +290,10 @@ class Prepare:
                 return self._parse_docx
             except ImportError:
                 raise ImportError("缺少 python-docx 依赖，请运行: pip install python-docx")
+
+        elif self.file_ext == ".txt":
+            self.logger.info("使用内置解析器处理 TXT")
+            return self._parse_txt
 
         elif self.file_ext == ".doc":
             try:
@@ -419,6 +423,30 @@ class Prepare:
 
         self.logger.info(f"DOC 解析完成，总字符数: {len(full_text)}")
         return full_text
+
+    def _parse_txt(self, file_path: str) -> str:
+        """TXT 文件解析实现。
+
+        直接读取纯文本文件，支持多种编码自动检测。
+
+        Args:
+            file_path: TXT 文件路径
+
+        Returns:
+            文件文本内容
+        """
+        self.logger.info(f"开始读取 TXT: {file_path}")
+
+        for encoding in ("utf-8", "utf-8-sig", "gbk", "gb2312", "big5", "latin-1"):
+            try:
+                with open(file_path, "r", encoding=encoding) as f:
+                    full_text = f.read()
+                self.logger.info(f"TXT 读取完成，编码: {encoding}，总字符数: {len(full_text)}")
+                return full_text
+            except UnicodeDecodeError:
+                continue
+
+        raise RuntimeError(f"无法解码文件 {file_path}，尝试的编码均失败")
 
     def read_content(self, parser) -> str:
         """第三步：将文件内容读取为文本。
