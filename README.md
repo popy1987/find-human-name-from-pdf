@@ -25,6 +25,7 @@
 │   ├── zh_core_web_sm/   # 中文 NER 模型
 │   ├── en_core_web_sm/   # 英文 NER 模型
 │   ├── name_dic_for_user.txt  # 用户自定义人名（每行一个，可选）
+│   └── name_blacklist.txt     # 人名黑名单，过滤 NER 误判（每行一个，可选）
 │   └── README.md         # 模型目录说明
 ├── logs/             # 日志文件目录（自动创建，不加入 Git）
 ├── output/           # 结果输出目录（自动创建，不加入 Git）
@@ -58,6 +59,12 @@ pip install -r requirements.txt
 ```
 
 若文件不存在，首次运行时会自动创建空模板。
+
+## 人名黑名单（可选）
+
+在 `dic/name_blacklist.txt` 中记录 NER 误判的词语（如地名、普通词汇被识别人名），每行一个。这些人名将被排除，降低误判率。预制条目包含：孤独感、布拉格、普林斯顿等常见误判。
+
+若文件不存在，首次运行时会自动创建带预制条目的模板。
 
 ## 准备 spaCy 模型
 

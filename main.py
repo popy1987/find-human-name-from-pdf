@@ -100,6 +100,7 @@ class Main:
                 self.logger,
                 custom_names=self.prepare.custom_names,
                 wiki_available=self.prepare.wiki_available,
+                name_blacklist=self.prepare.name_blacklist,
             )
             results = self.run.process()
 

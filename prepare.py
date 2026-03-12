@@ -37,8 +37,14 @@ class Prepare:
         # 用户自定义人名词典路径
         self.name_dic_path = os.path.join(self.dic_dir, "name_dic_for_user.txt")
 
+        # 人名黑名单路径（误判过滤）
+        self.name_blacklist_path = os.path.join(self.dic_dir, "name_blacklist.txt")
+
         # 加载的自定义人名列表（供 Run 使用）
         self.custom_names: List[str] = []
+
+        # 加载的人名黑名单（供 Run 使用，NER 误判的词语）
+        self.name_blacklist: List[str] = []
 
         # 维基百科 API 是否可用（prepare 阶段嗅探）
         self.wiki_available: bool = True
@@ -281,6 +287,48 @@ class Prepare:
             return []
 
         return names
+
+    def _load_blacklist(self) -> List[str]:
+        """加载 name_blacklist.txt 中的人名黑名单。
+
+        黑名单用于过滤 NER 误判（如地名、普通词语被识别人名）。
+        若文件不存在则创建带预制条目的模板。
+        每行一个词条，以 # 开头的行和空行会被忽略。
+
+        Returns:
+            黑名单词条列表
+        """
+        default_entries = [
+            "# 人名黑名单：过滤 NER 误判",
+            "# 每行一个词条，支持中文和英文",
+            "# 以 # 开头的行会被忽略",
+            "#",
+            "# 常见误判示例：",
+            "孤独感",
+            "布拉格",
+            "普林斯顿",
+        ]
+        if not os.path.exists(self.name_blacklist_path):
+            try:
+                with open(self.name_blacklist_path, "w", encoding="utf-8") as f:
+                    f.write("\n".join(default_entries) + "\n")
+                self.logger.info(f"已创建黑名单模板: {self.name_blacklist_path}")
+            except OSError as e:
+                self.logger.warning(f"无法创建 name_blacklist.txt: {e}")
+            return [e for e in default_entries if not e.startswith("#") and e.strip()]
+
+        entries = []
+        try:
+            with open(self.name_blacklist_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        entries.append(line)
+        except OSError as e:
+            self.logger.warning(f"无法读取 name_blacklist.txt: {e}")
+            return []
+
+        return entries
 
     def load_parser(self):
         """第二步：加载解析器。
@@ -550,13 +598,18 @@ class Prepare:
         if self.custom_names:
             self.logger.info(f"已加载 {len(self.custom_names)} 个自定义人名: {self.name_dic_path}")
 
-        # 第四步：校验
+        # 第四步：加载人名黑名单
+        self.name_blacklist = self._load_blacklist()
+        if self.name_blacklist:
+            self.logger.info(f"已加载 {len(self.name_blacklist)} 条黑名单: {self.name_blacklist_path}")
+
+        # 第五步：校验
         self.validate()
 
-        # 第五步：加载解析器
+        # 第六步：加载解析器
         parser = self.load_parser()
 
-        # 第六步：读取内容
+        # 第七步：读取内容
         content = self.read_content(parser)
 
         return content

@@ -50,6 +50,7 @@ class Run:
         logger: logging.Logger,
         custom_names: Optional[List[str]] = None,
         wiki_available: bool = True,
+        name_blacklist: Optional[List[str]] = None,
     ):
         """Initialize the Run class.
 
@@ -58,11 +59,13 @@ class Run:
             logger: 日志记录器实例
             custom_names: 来自 name_dic_for_user.txt 的自定义人名列表
             wiki_available: prepare 阶段嗅探结果，为 False 时不获取维基简介
+            name_blacklist: 人名黑名单，用于过滤 NER 误判
         """
         self.content = content
         self.logger = logger
         self.custom_names = custom_names or []
         self.wiki_available = wiki_available
+        self.name_blacklist = set((name_blacklist or []))
         self.names: Set[str] = set()
         self.name_counts: Dict[str, int] = {}
 
@@ -256,6 +259,8 @@ class Run:
     def filter_and_rank(self, min_count: int = 2) -> List[Dict]:
         """过滤并排序人名。
 
+        排除黑名单中的误判词条；保留出现次数 >= min_count 的人名。
+
         Args:
             min_count: 最小出现次数阈值
 
@@ -263,6 +268,16 @@ class Run:
             排序后的人名列表
         """
         self.logger.info(f"过滤出现次数 >= {min_count} 的人名")
+        if self.name_blacklist:
+            excluded = [
+                name for name in self.name_counts
+                if name in self.name_blacklist
+            ]
+            if excluded:
+                self.logger.info(f"黑名单排除 {len(excluded)} 个误判: {', '.join(excluded[:5])}{'...' if len(excluded) > 5 else ''}")
+                for name in excluded:
+                    self.names.discard(name)
+                    self.name_counts.pop(name, None)
 
         def get_name_type(name: str) -> str:
             """判断人名类型。"""

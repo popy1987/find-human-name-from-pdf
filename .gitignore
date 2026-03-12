@@ -8,6 +8,7 @@ output/
 # Local spaCy models (downloaded at runtime)
 dic/*
 !dic/name_dic_for_user.txt
+!dic/name_blacklist.txt
 
 # Python
 __pycache__/
