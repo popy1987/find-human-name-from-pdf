@@ -112,7 +112,7 @@ def main():
     parser.add_argument(
         "file_path",
         type=str,
-        help="输入文件的绝对路径（目前支持 PDF）"
+        help="输入文件的绝对路径（支持 PDF、DOC、DOCX）"
     )
 
     args = parser.parse_args()

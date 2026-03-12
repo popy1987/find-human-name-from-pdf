@@ -16,7 +16,7 @@ class Prepare:
     4. 将文件内容读取为文本（处理大文件，支持几十万字）
     """
 
-    SUPPORTED_FORMATS = {".pdf"}
+    SUPPORTED_FORMATS = {".pdf", ".doc", ".docx"}
     REQUIRED_SPACY_MODELS = ["zh_core_web_sm", "en_core_web_sm"]
 
     def __init__(self, file_path: str, logger: logging.Logger):
@@ -268,7 +268,7 @@ class Prepare:
         """第二步：加载解析器。
 
         根据文件类型返回对应的解析函数。
-        目前仅支持 PDF，使用 PyMuPDF (fitz) 库。
+        支持 PDF、DOC、DOCX。
 
         Returns:
             解析函数
@@ -281,9 +281,27 @@ class Prepare:
                 self.logger.info("成功加载 PDF 解析器 (PyMuPDF)")
                 return self._parse_pdf
             except ImportError:
+                raise ImportError("缺少 PyMuPDF 依赖，请运行: pip install PyMuPDF")
+
+        elif self.file_ext == ".docx":
+            try:
+                from docx import Document
+                self.logger.info("成功加载 DOCX 解析器 (python-docx)")
+                return self._parse_docx
+            except ImportError:
+                raise ImportError("缺少 python-docx 依赖，请运行: pip install python-docx")
+
+        elif self.file_ext == ".doc":
+            try:
+                import textract
+                self.logger.info("成功加载 DOC 解析器 (textract)")
+                return self._parse_doc
+            except ImportError:
                 raise ImportError(
-                    "缺少 PyMuPDF 依赖，请运行: pip install PyMuPDF"
+                    "缺少 textract 依赖，请运行: pip install textract。"
+                    "注意：.doc 解析需要系统安装 antiword(Linux) 或相应后端(Windows)"
                 )
+
         else:
             raise ValueError(f"没有可用的解析器: {self.file_ext}")
 
@@ -328,6 +346,78 @@ class Prepare:
 
         full_text = "\n".join(text_parts)
         self.logger.info(f"PDF 解析完成，总字符数: {len(full_text)}")
+        return full_text
+
+    def _parse_docx(self, file_path: str) -> str:
+        """DOCX 文件解析实现。
+
+        使用 python-docx 提取段落和表格中的文本。
+
+        Args:
+            file_path: DOCX 文件路径
+
+        Returns:
+            提取的文本内容
+        """
+        from docx import Document
+
+        self.logger.info(f"开始解析 DOCX: {file_path}")
+        text_parts = []
+
+        doc = Document(file_path)
+
+        # 提取段落
+        for para in doc.paragraphs:
+            if para.text.strip():
+                text_parts.append(para.text)
+
+        # 提取表格
+        for table in doc.tables:
+            for row in table.rows:
+                row_texts = []
+                for cell in row.cells:
+                    cell_text = cell.text.strip()
+                    if cell_text:
+                        row_texts.append(cell_text)
+                if row_texts:
+                    text_parts.append(" ".join(row_texts))
+
+        full_text = "\n".join(text_parts)
+        self.logger.info(f"DOCX 解析完成，总字符数: {len(full_text)}")
+        return full_text
+
+    def _parse_doc(self, file_path: str) -> str:
+        """DOC 文件解析实现。
+
+        使用 textract 提取 .doc (Office 97-2003) 格式的文本。
+        需要系统安装 antiword(Linux) 或相应依赖(Windows)。
+
+        Args:
+            file_path: DOC 文件路径
+
+        Returns:
+            提取的文本内容
+        """
+        import textract
+
+        self.logger.info(f"开始解析 DOC: {file_path}")
+
+        try:
+            # textract 返回 bytes，需解码
+            raw = textract.process(file_path)
+            # 尝试多种编码
+            for encoding in ("utf-8", "gbk", "gb2312", "latin-1"):
+                try:
+                    full_text = raw.decode(encoding)
+                    break
+                except UnicodeDecodeError:
+                    continue
+            else:
+                full_text = raw.decode("utf-8", errors="replace")
+        except Exception as e:
+            raise RuntimeError(f"DOC 解析失败: {e}") from e
+
+        self.logger.info(f"DOC 解析完成，总字符数: {len(full_text)}")
         return full_text
 
     def read_content(self, parser) -> str:

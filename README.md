@@ -1,6 +1,6 @@
 # Find Human Name from PDF
 
-从 PDF 文件中提取人名的 Python 工具，使用 spaCy NER（命名实体识别）进行中英文人名识别。
+从 PDF、DOC、DOCX 文件中提取人名的 Python 工具，使用 spaCy NER（命名实体识别）进行中英文人名识别。
 
 ## 核心特点
 
@@ -8,7 +8,8 @@
 - **本地模型优先**：优先从 `dic/` 目录加载 spaCy 模型，便于离线部署
 - **自动模型管理**：缺失的模型会自动下载到本地
 - **双日志输出**：同时输出到控制台和 `logs/` 目录的日志文件
-- **大文件支持**：流式读取 PDF，支持几十万字的大文档
+- **多格式支持**：PDF、DOC、DOCX
+- **大文件支持**：流式读取，支持几十万字的大文档
 
 ## 项目结构
 
@@ -38,6 +39,8 @@ pip install -r requirements.txt
 
 依赖包括：
 - `PyMuPDF` - PDF 解析
+- `python-docx` - DOCX 解析
+- `textract` - DOC 解析（需系统安装 antiword 等依赖）
 - `spacy` - NER 模型运行框架
 
 ## 自定义人名（可选）
@@ -93,7 +96,7 @@ cp -r /path/to/en_core_web_sm ./dic/
 ### 正常模式
 
 ```bash
-python main.py <PDF 文件的绝对路径>
+python main.py <文件绝对路径>
 ```
 
 示例：
@@ -164,10 +167,11 @@ python main.py --test
 
 - 检查文件存在性、可读性、格式支持
 
-**第三阶段：PDF 解析**
+**第三阶段：文件解析**
 
-- 使用 PyMuPDF 逐页读取文本
-- 支持大文件流式处理
+- PDF：使用 PyMuPDF 逐页读取
+- DOCX：使用 python-docx 提取段落和表格
+- DOC：使用 textract 提取（需系统依赖）
 
 ### run.py
 
@@ -214,6 +218,10 @@ A: 国内访问 GitHub 可能较慢，可尝试：
    ```bash
    pip install zh_core_web_sm-3.8.0-py3-none-any.whl --target ./dic
    ```
+
+### Q: .doc 文件解析失败？
+
+A: textract 解析 .doc 需要系统依赖。Linux 可安装 `antiword`。建议将 .doc 转为 .docx 后使用。
 
 ### Q: 提取的人名不完整？
 
