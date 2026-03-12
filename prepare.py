@@ -12,11 +12,11 @@ class Prepare:
     功能职责：
     1. 检查并安装必要的 spaCy 语言模型（优先从本地 dic 目录加载）
     2. 校验文件（路径、格式、可读性）
-    3. 根据文件类型加载对应的解析器（目前仅支持 PDF）
+    3. 根据文件类型加载对应的解析器（PDF、DOC、DOCX、TXT、Markdown）
     4. 将文件内容读取为文本（处理大文件，支持几十万字）
     """
 
-    SUPPORTED_FORMATS = {".pdf", ".doc", ".docx", ".txt"}
+    SUPPORTED_FORMATS = {".pdf", ".doc", ".docx", ".txt", ".md", ".markdown"}
     REQUIRED_SPACY_MODELS = ["zh_core_web_sm", "en_core_web_sm"]
 
     def __init__(self, file_path: str, logger: logging.Logger):
@@ -268,7 +268,7 @@ class Prepare:
         """第二步：加载解析器。
 
         根据文件类型返回对应的解析函数。
-        支持 PDF、DOC、DOCX、TXT。
+        支持 PDF、DOC、DOCX、TXT、Markdown（.md/.markdown）。
 
         Returns:
             解析函数
@@ -304,6 +304,16 @@ class Prepare:
                 raise ImportError(
                     "缺少 textract 依赖，请运行: pip install textract。"
                     "注意：.doc 解析需要系统安装 antiword(Linux) 或相应后端(Windows)"
+                )
+
+        elif self.file_ext in (".md", ".markdown"):
+            try:
+                import strip_markdown
+                self.logger.info("成功加载 Markdown 解析器 (strip_markdown)")
+                return self._parse_markdown
+            except ImportError:
+                raise ImportError(
+                    "缺少 strip-markdown 依赖，请运行: pip install strip-markdown"
                 )
 
         else:
@@ -447,6 +457,37 @@ class Prepare:
                 continue
 
         raise RuntimeError(f"无法解码文件 {file_path}，尝试的编码均失败")
+
+    def _parse_markdown(self, file_path: str) -> str:
+        """Markdown 文件解析实现。
+
+        先读取原始 Markdown 内容，再使用 strip_markdown 去除语法标记，提取纯文本。
+        去除的标记包括：标题符 #、强调 ** *、链接 [text](url)、图片、代码块、
+        列表符号、表格线等，避免这些符号干扰人名提取和标点校验。
+
+        Args:
+            file_path: Markdown 文件路径
+
+        Returns:
+            去除 Markdown 语法后的纯文本
+        """
+        import strip_markdown
+
+        self.logger.info(f"开始解析 Markdown: {file_path}")
+
+        for encoding in ("utf-8", "utf-8-sig", "gbk", "gb2312", "latin-1"):
+            try:
+                with open(file_path, "r", encoding=encoding) as f:
+                    raw_md = f.read()
+                break
+            except UnicodeDecodeError:
+                continue
+        else:
+            raise RuntimeError(f"无法解码文件 {file_path}，尝试的编码均失败")
+
+        plain_text = strip_markdown.strip_markdown(raw_md)
+        self.logger.info(f"Markdown 解析完成，总字符数: {len(plain_text)}（已去除语法标记）")
+        return plain_text
 
     def read_content(self, parser) -> str:
         """第三步：将文件内容读取为文本。

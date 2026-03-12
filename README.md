@@ -1,6 +1,6 @@
 # Find Human Name from PDF
 
-从 PDF、DOC、DOCX、TXT 文件中提取人名的 Python 工具，使用 spaCy NER（命名实体识别）进行中英文人名识别。
+从 PDF、DOC、DOCX、TXT、Markdown 等文件中提取人名的 Python 工具，使用 spaCy NER（命名实体识别）进行中英文人名识别。
 
 ## 核心特点
 
@@ -8,7 +8,7 @@
 - **本地模型优先**：优先从 `dic/` 目录加载 spaCy 模型，便于离线部署
 - **自动模型管理**：缺失的模型会自动下载到本地
 - **双日志输出**：同时输出到控制台和 `logs/` 目录的日志文件
-- **多格式支持**：PDF、DOC、DOCX、TXT
+- **多格式支持**：PDF、DOC、DOCX、TXT、Markdown（.md/.markdown）
 - **大文件支持**：流式读取，支持几十万字的大文档
 - **标点校验**：基于 GB/T 15834-2011，使用 spaCy 分句进行标点合规性检查
 
@@ -43,6 +43,7 @@ pip install -r requirements.txt
 - `PyMuPDF` - PDF 解析
 - `python-docx` - DOCX 解析
 - `textract` - DOC 解析（需系统安装 antiword 等依赖）
+- `strip-markdown` - Markdown 解析（提取纯文本，去除语法标记）
 - `spacy` - NER 模型运行框架
 
 ## 自定义人名（可选）
@@ -175,6 +176,7 @@ python main.py --test
 - DOCX：使用 python-docx 提取段落和表格
 - DOC：使用 textract 提取（需系统依赖）
 - TXT：直接读取，支持 UTF-8/GBK 等编码
+- Markdown（.md/.markdown）：使用 strip-markdown 去除语法标记后提取纯文本，再进行人名提取和标点校验
 
 ### run.py
 

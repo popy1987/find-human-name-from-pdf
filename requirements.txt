@@ -5,6 +5,9 @@ PyMuPDF>=1.23.0
 python-docx>=1.0.0
 textract>=1.6.0
 
+# Markdown parsing (extract plain text from .md/.markdown)
+strip-markdown>=1.0.0
+
 # NER and NLP
 spacy>=3.7.0
 
