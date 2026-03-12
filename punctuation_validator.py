@@ -1,4 +1,11 @@
-"""标点符号校验模块，基于 GB/T 15834-2011 国家标准。
+"""标点符号校验模块，基于 GB/T 15834-2011《标点符号用法》国家标准。
+
+依据标准第 5 章「标点符号的位置和书写形式」及附录 A/B：
+- 5.1.1–5.1.2：点号（句号、逗号、顿号、分号、冒号、问号、叹号）占一个字位置，采用全角形式
+- 5.1.6：连接号分为短横线 -、一字线 —、浪纹线 ～；破折号用 —
+- 5.1.7：间隔号占半个字；4.14.3.5 阿拉伯数字月日间用半角间隔号
+- 5.1.9：分隔号占半个字
+- 中文语境使用全角标点，外文/数字语境使用半角标点；全角标点两旁不得空半角空格
 
 使用 spaCy 进行分句和上下文分析，结合规则引擎校验标点合规性。
 """
@@ -73,7 +80,7 @@ class PunctuationIssue:
 
 
 def _check_ellipsis(text: str) -> List[PunctuationIssue]:
-    """省略号：应使用 ……，不得使用 ... 或 。。。"""
+    """省略号：GB/T 15834-2011 4.11 统一为六连点 ……，不得使用 ... 或 。。。"""
     issues = []
     # 句号连用（三至五个）视为错误省略号
     for m in re.finditer(r'。{3,5}', text):
@@ -106,8 +113,31 @@ def _check_ellipsis(text: str) -> List[PunctuationIssue]:
     return issues
 
 
+def _check_date_delimiter(text: str) -> List[PunctuationIssue]:
+    """日期简写：GB A.4.2 阿拉伯数字年月日间用短横线，不用顿号。"""
+    issues = []
+    for m in re.finditer(r'\d{4}、\d{1,2}、\d{1,2}', text):
+        for i, c in enumerate(m.group()):
+            if c == '、':
+                pos = m.start() + i
+                issues.append(PunctuationIssue(
+                    rule_id="DATE_DELIM",
+                    position=pos,
+                    length=1,
+                    text='、',
+                    message="日期简写中月日之间应用短横线连接号",
+                    suggestion="如 2010-03-02，不用顿号",
+                    context=_get_context(text, m.start(), len(m.group())),
+                ))
+    return issues
+
+
 def _check_dash(text: str) -> List[PunctuationIssue]:
-    """破折号/连接号：破折号用 —，连接号用 - 或 ～"""
+    """破折号/连接号：GB 4.13 破折号用 —（占两字）；连接号用 -、—、～。
+
+    短横线 - 占半字，用于号码、复合词等；一字线 — 占一字；浪纹线 ～ 用于数值范围。
+    两个及以上连字符 -- 视为不规范，应改为破折号 —。
+    """
     issues = []
     for m in re.finditer(r'--+', text):
         pos, ln = m.start(), len(m.group())
@@ -117,14 +147,14 @@ def _check_dash(text: str) -> List[PunctuationIssue]:
             length=ln,
             text=m.group(),
             message=f"破折号形式不规范：'{m.group()}'",
-            suggestion="破折号应使用一字线 —",
+            suggestion="破折号应使用一字线 —（占两个字位置）",
             context=_get_context(text, pos, ln),
         ))
     return issues
 
 
 def _check_quote_pairs(text: str) -> List[PunctuationIssue]:
-    """引号、括号、书名号配对检查。"""
+    """引号、括号、书名号配对检查（GB 5.1.3）。"""
     issues = []
     # 左右不同的符号对
     pairs = [
@@ -186,10 +216,17 @@ def _check_quote_pairs(text: str) -> List[PunctuationIssue]:
     return issues
 
 
+def _is_chinese(c: str) -> bool:
+    """是否为 CJK 统一汉字。"""
+    return '\u4e00' <= c <= '\u9fff'
+
+
 def _check_halfwidth(text: str) -> List[PunctuationIssue]:
-    """全半角：中文语境下应使用全角标点。"""
+    """半角标点误用：GB 5.1.1–5.1.2 中文语境下点号应占一字、使用全角形式。
+
+    例外不报错：数字后的半角标点（如 3.14、1,000、12:30）；人名后的冒号（如「张三：」）。
+    """
     issues = []
-    # 在中文后的半角标点
     halfwidth_map = {
         ',': '，',
         '.': '。',
@@ -198,12 +235,10 @@ def _check_halfwidth(text: str) -> List[PunctuationIssue]:
         '!': '！',
         '?': '？',
     }
-    # 匹配：中文字符 + 半角标点
     for char, full in halfwidth_map.items():
         pattern = rf'[\u4e00-\u9fa5]{re.escape(char)}(?=[\s\u4e00-\u9fa5]|$)'
         for m in re.finditer(pattern, text):
             pos = m.start() + len(m.group()) - 1
-            # 人名后的冒号是正确的（如「张三：」），不报错
             if char == ':' and _is_name_before_colon(text, pos):
                 continue
             issues.append(PunctuationIssue(
@@ -211,9 +246,69 @@ def _check_halfwidth(text: str) -> List[PunctuationIssue]:
                 position=pos,
                 length=1,
                 text=char,
-                message=f"中文后应使用全角标点：'{char}'",
+                message=f"中文后应使用全角标点：'{char}'（GB 5.1）",
                 suggestion=f"应改为 '{full}'",
                 context=_get_context(text, pos, 1),
+            ))
+    return issues
+
+
+def _check_fullwidth_after_ascii(text: str) -> List[PunctuationIssue]:
+    """全角标点误用：英文字母或数字后的全角点号应改为半角（GB 5.1 混排规则）。"""
+    issues = []
+    full_to_half = {
+        '，': ',',
+        '。': '.',
+        '；': ';',
+        '：': ':',
+        '！': '!',
+        '？': '?',
+    }
+    for full, half in full_to_half.items():
+        # 英文字母或数字后紧跟全角点号
+        pattern = rf'[a-zA-Z0-9]{re.escape(full)}'
+        for m in re.finditer(pattern, text):
+            pos = m.start() + len(m.group()) - 1
+            issues.append(PunctuationIssue(
+                rule_id="FULLWIDTH_AFTER_ASCII",
+                position=pos,
+                length=1,
+                text=full,
+                message=f"英文/数字后应使用半角标点：'{full}'",
+                suggestion=f"应改为 '{half}'",
+                context=_get_context(text, pos, 1),
+            ))
+    return issues
+
+
+def _check_space_around_punctuation(text: str) -> List[PunctuationIssue]:
+    """全角标点两旁不得空半角空格（中文排版规范）。"""
+    issues = []
+    fullwidth_punct = '，。、；：！？」』）］〕》〉'
+    for i, c in enumerate(text):
+        if c not in fullwidth_punct:
+            continue
+        # 全角标点前不应有空格（空格+全角标点）
+        if i > 0 and text[i - 1] == ' ':
+            issues.append(PunctuationIssue(
+                rule_id="SPACE_BEFORE_PUNCT",
+                position=i - 1,
+                length=1,
+                text=' ',
+                message="全角标点前不应有半角空格",
+                suggestion="删除标点前的空格",
+                context=_get_context(text, i - 1, 2),
+            ))
+        # 全角标点后不应紧跟空格再跟中文（标点+空格+中文）
+        if i + 2 < len(text) and text[i + 1] == ' ' and _is_chinese(text[i + 2]):
+            issues.append(PunctuationIssue(
+                rule_id="SPACE_AFTER_PUNCT",
+                position=i + 1,
+                length=1,
+                text=' ',
+                message="全角标点后不应有半角空格再跟中文",
+                suggestion="删除标点后的空格",
+                context=_get_context(text, i, 3),
             ))
     return issues
 
@@ -223,9 +318,9 @@ def _check_sentence_end_punctuation(
     nlp,
     chunk_size: int = 50000,
 ) -> List[PunctuationIssue]:
-    """句末点号：基于 spaCy 分句，检查句末标点。
+    """句末点号：GB 5.1.1–5.1.2 句末应为 。？！… 之一，或后接引号/括号等。
 
-    句末应为 。？！… 之一，或后接引号/括号等。
+    基于 spaCy 分句，检查句末不宜使用逗号、顿号、分号、冒号（人名后冒号除外）。
     """
     if nlp is None:
         return []
@@ -292,9 +387,12 @@ def validate_punctuation(
 
     # 1. 字符级规则（不依赖 NLP）
     all_issues.extend(_check_ellipsis(text))
+    all_issues.extend(_check_date_delimiter(text))
     all_issues.extend(_check_dash(text))
     all_issues.extend(_check_quote_pairs(text))
     all_issues.extend(_check_halfwidth(text))
+    all_issues.extend(_check_fullwidth_after_ascii(text))
+    all_issues.extend(_check_space_around_punctuation(text))
 
     # 2. 基于 NLP 的句末点号检查
     if use_nlp and nlp and len(text) > 0:
