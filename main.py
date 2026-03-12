@@ -32,6 +32,8 @@ class Main:
         """
         self.file_path = file_path
         self.logger = None
+        self.log_file_path = None
+        self.output_file_path = None
         self.prepare = None
         self.run = None
         self.teardown = None
@@ -45,8 +47,14 @@ class Main:
         logger = logging.getLogger("find_human_name")
         logger.setLevel(logging.DEBUG)
 
-        # 清除已有处理器
-        logger.handlers = []
+        # 清除已有处理器（先关闭文件类 handler 再清除，避免占用）
+        for h in logger.handlers[:]:
+            if isinstance(h, logging.FileHandler):
+                try:
+                    h.close()
+                except Exception:
+                    pass
+            logger.removeHandler(h)
 
         # 创建格式器
         formatter = logging.Formatter(
@@ -64,9 +72,9 @@ class Main:
         os.makedirs(log_dir, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_file = os.path.join(log_dir, f"app_{timestamp}.log")
+        self.log_file_path = os.path.join(log_dir, f"app_{timestamp}.log")
 
-        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler = logging.FileHandler(self.log_file_path, encoding="utf-8")
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
@@ -93,7 +101,8 @@ class Main:
             # 3. 清理阶段
             self.logger.info("=== 清理阶段 ===")
             self.teardown = Teardown(results, self.logger)
-            self.teardown.process()
+            process_result = self.teardown.process()
+            self.output_file_path = process_result.get("output_file")
 
             self.logger.info("处理完成")
 
@@ -101,6 +110,21 @@ class Main:
             if self.logger:
                 self.logger.error(f"执行出错: {e}", exc_info=True)
             raise
+
+    def close_logging(self):
+        """关闭日志文件句柄，释放文件占用，便于后续删除。
+
+        测试模式下在删除 log 文件前必须调用，否则可能因进程占用导致删除失败。
+        """
+        if not self.logger:
+            return
+        for h in self.logger.handlers[:]:
+            if isinstance(h, logging.FileHandler):
+                try:
+                    h.close()
+                except Exception:
+                    pass
+                self.logger.removeHandler(h)
 
 
 def main():
@@ -132,9 +156,13 @@ def main():
 
 
 def test():
-    """测试函数，依次使用工程目录下的 sample.pdf、sample.docx、sample.md 运行主流程。"""
+    """测试函数，依次使用工程目录下的 sample.pdf、sample.docx、sample.md 运行主流程。
+
+    测试结束后删除本次生成的 log 和 JSON 文件，避免测试产物堆积。
+    """
     current_dir = os.path.dirname(os.path.abspath(__file__))
     sample_files = ["sample.pdf", "sample.docx", "sample.md"]
+    files_to_delete = []
 
     for i, filename in enumerate(sample_files):
         file_path = os.path.join(current_dir, filename)
@@ -148,7 +176,32 @@ def test():
         print(f"{'='*60}\n")
 
         app = Main(file_path)
-        app.execute()
+        try:
+            app.execute()
+        finally:
+            # 关闭日志文件句柄，避免进程占用导致无法删除
+            app.close_logging()
+            if app.log_file_path:
+                files_to_delete.append(app.log_file_path)
+            if app.output_file_path:
+                files_to_delete.append(app.output_file_path)
+
+    # 收尾：删除本次测试生成的 log 和 JSON
+    if files_to_delete:
+        print(f"\n{'='*60}")
+        print("测试收尾：清理本次生成的 log 和 JSON 文件")
+        print(f"{'='*60}")
+    deleted = 0
+    for path in files_to_delete:
+        try:
+            if path and os.path.exists(path):
+                os.remove(path)
+                print(f"  已删除: {os.path.basename(path)}")
+                deleted += 1
+        except OSError as e:
+            print(f"  无法删除 {path}: {e}")
+    if deleted:
+        print(f"共清理 {deleted} 个文件")
 
 
 if __name__ == "__main__":
