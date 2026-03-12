@@ -132,22 +132,23 @@ def main():
 
 
 def test():
-    """测试函数，使用工程目录下的 sample.pdf 运行主流程。"""
-    # 构建 sample.pdf 的绝对路径
+    """测试函数，依次使用工程目录下的 sample.pdf、sample.docx、sample.md 运行主流程。"""
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    sample_pdf_path = os.path.join(current_dir, "sample.pdf")
+    sample_files = ["sample.pdf", "sample.docx", "sample.md"]
 
-    # 检查文件是否存在
-    if not os.path.exists(sample_pdf_path):
-        print(f"错误: 测试文件不存在: {sample_pdf_path}")
-        print("请确保工程目录下存在 sample.pdf 文件")
-        sys.exit(1)
+    for i, filename in enumerate(sample_files):
+        file_path = os.path.join(current_dir, filename)
 
-    print(f"测试模式: 使用文件 {sample_pdf_path}")
+        if not os.path.exists(file_path):
+            print(f"警告: 测试文件不存在: {file_path}，跳过")
+            continue
 
-    # 启动主流程
-    app = Main(sample_pdf_path)
-    app.execute()
+        print(f"\n{'='*60}")
+        print(f"测试模式 ({i+1}/{len(sample_files)}): 使用文件 {file_path}")
+        print(f"{'='*60}\n")
+
+        app = Main(file_path)
+        app.execute()
 
 
 if __name__ == "__main__":
