@@ -6,6 +6,7 @@
 - 5.1.7：间隔号占半个字；4.14.3.5 阿拉伯数字月日间用半角间隔号
 - 5.1.9：分隔号占半个字
 - 中文语境使用全角标点，外文/数字语境使用半角标点；全角标点两旁不得空半角空格
+- 空格：禁止全角空格；中文字符之间禁止半角空格；禁止连续多个半角空格（技术文档/出版物规范）
 
 使用 spaCy 进行分句和上下文分析，结合规则引擎校验标点合规性。
 """
@@ -281,6 +282,69 @@ def _check_fullwidth_after_ascii(text: str) -> List[PunctuationIssue]:
     return issues
 
 
+def _check_space(text: str) -> List[PunctuationIssue]:
+    """空格校验：中文出版物/排版规范。
+
+    依据：技术文档与出版物空格规范、中文技术文档写作风格指南。
+    - 禁止使用全角空格（U+3000），应使用半角空格
+    - 中文字符（汉字、中文标点）之间禁止插入半角空格
+    - 禁止连续两个及以上半角空格（缩进等特殊场景除外）
+    """
+    issues = []
+    i = 0
+    while i < len(text):
+        c = text[i]
+        # 1. 全角空格：禁止使用
+        if c == '\u3000':
+            issues.append(PunctuationIssue(
+                rule_id="FULLWIDTH_SPACE",
+                position=i,
+                length=1,
+                text=c,
+                message="禁止使用全角空格",
+                suggestion="应改为半角空格",
+                context=_get_context(text, i, 1),
+            ))
+            i += 1
+            continue
+
+        # 2. 中文字符之间的半角空格（汉字+空格+汉字；标点旁空格由 _check_space_around_punctuation 处理）
+        if c == ' ' and i > 0 and i + 1 < len(text):
+            prev, nxt = text[i - 1], text[i + 1]
+            if _is_chinese(prev) and _is_chinese(nxt):
+                issues.append(PunctuationIssue(
+                    rule_id="SPACE_BETWEEN_CJK",
+                    position=i,
+                    length=1,
+                    text=' ',
+                    message="中文字符之间不应插入半角空格",
+                    suggestion="删除此处空格",
+                    context=_get_context(text, i, 1),
+                ))
+
+        # 3. 连续两个及以上半角空格
+        if c == ' ' and i + 1 < len(text) and text[i + 1] == ' ':
+            j = i + 1
+            while j < len(text) and text[j] == ' ':
+                j += 1
+            ln = j - i
+            if ln >= 2:
+                issues.append(PunctuationIssue(
+                    rule_id="MULTI_SPACE",
+                    position=i,
+                    length=ln,
+                    text=' ' * ln,
+                    message=f"禁止连续 {ln} 个半角空格",
+                    suggestion="保留一个空格或根据排版需求调整",
+                    context=_get_context(text, i, ln),
+                ))
+                i = j
+                continue
+
+        i += 1
+    return issues
+
+
 def _check_space_around_punctuation(text: str) -> List[PunctuationIssue]:
     """全角标点两旁不得空半角空格（中文排版规范）。"""
     issues = []
@@ -392,6 +456,7 @@ def validate_punctuation(
     all_issues.extend(_check_quote_pairs(text))
     all_issues.extend(_check_halfwidth(text))
     all_issues.extend(_check_fullwidth_after_ascii(text))
+    all_issues.extend(_check_space(text))
     all_issues.extend(_check_space_around_punctuation(text))
 
     # 2. 基于 NLP 的句末点号检查
